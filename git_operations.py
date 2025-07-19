@@ -172,10 +172,10 @@ class GitOperations:
             return True
             
         try:
-            # Merge the PR
+            # Merge the PR directly (without --auto which requires special GitHub settings)
             self.logger.info(f"Merging PR #{pr_number}...")
             merge_result = subprocess.run(
-                ["gh", "pr", "merge", pr_number, "--merge", "--auto"],
+                ["gh", "pr", "merge", pr_number, "--merge"],
                 capture_output=True,
                 text=True,
                 check=True
