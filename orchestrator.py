@@ -20,11 +20,12 @@ from prompts import PROMPT_TEMPLATES
 
 
 class WorkflowOrchestrator:
-    def __init__(self, feature_name: str, feature_description: str = "", dry_run: bool = False, force_refresh: bool = False):
+    def __init__(self, feature_name: str, feature_description: str = "", dry_run: bool = False, force_refresh: bool = False, auto_merge: bool = True):
         self.feature_name = feature_name
         self.feature_description = feature_description
         self.dry_run = dry_run
         self.force_refresh = force_refresh
+        self.auto_merge = auto_merge
         self.workflow_dir = Path(".claude-workflow")
         self.phase_outputs_dir = self.workflow_dir / "phase_outputs"
         self.logs_dir = self.workflow_dir / "logs"
@@ -276,6 +277,17 @@ class WorkflowOrchestrator:
             
             if pr_url:
                 self.logger.info(f"Pull request created: {pr_url}")
+                
+                # Extract PR number from URL
+                pr_number = pr_url.split('/')[-1]
+                
+                # Auto-merge the PR if enabled
+                if self.auto_merge:
+                    self.logger.info("Auto-merge enabled, merging PR...")
+                    if self.git.merge_pull_request(pr_number, delete_branch=True):
+                        self.logger.info("PR merged and branch deleted successfully")
+                    else:
+                        self.logger.warning("Auto-merge failed, PR remains open")
         else:
             self.logger.info("[DRY RUN] Would stage, commit, push and create PR")
             
@@ -433,6 +445,11 @@ Note: The feature name can be approximate. Claude will understand variations lik
         action="store_true",
         help="Force regeneration of all analyses (ignore cache)"
     )
+    parser.add_argument(
+        "--no-auto-merge",
+        action="store_true",
+        help="Disable automatic merging of PR after creation"
+    )
     
     args = parser.parse_args()
     
@@ -440,7 +457,8 @@ Note: The feature name can be approximate. Claude will understand variations lik
         args.feature_name, 
         feature_description=args.description,
         dry_run=args.dry_run,
-        force_refresh=args.force_refresh
+        force_refresh=args.force_refresh,
+        auto_merge=not args.no_auto_merge  # Auto-merge par défaut, sauf si --no-auto-merge
     )
     
     if args.cleanup:

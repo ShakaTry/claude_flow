@@ -165,6 +165,42 @@ class GitOperations:
             self.logger.error(f"Failed to create PR: {e.stderr}")
             return None
             
+    def merge_pull_request(self, pr_number: str, delete_branch: bool = True) -> bool:
+        """Merge a pull request and optionally delete the branch"""
+        if self.dry_run:
+            self.logger.info(f"[DRY RUN] Would merge PR #{pr_number} and delete branch")
+            return True
+            
+        try:
+            # Merge the PR
+            self.logger.info(f"Merging PR #{pr_number}...")
+            merge_result = subprocess.run(
+                ["gh", "pr", "merge", pr_number, "--merge", "--auto"],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            self.logger.info(f"PR #{pr_number} merged successfully")
+            
+            if delete_branch:
+                # Delete the branch after merge
+                self.logger.info("Deleting merged branch...")
+                delete_result = subprocess.run(
+                    ["gh", "pr", "merge", pr_number, "--delete-branch"],
+                    capture_output=True,
+                    text=True,
+                    check=False  # Don't fail if branch is already deleted
+                )
+                if delete_result.returncode == 0:
+                    self.logger.info("Branch deleted successfully")
+                else:
+                    self.logger.warning("Could not delete branch (may already be deleted)")
+                    
+            return True
+            
+        except subprocess.CalledProcessError as e:
+            self.logger.error(f"Failed to merge PR: {e.stderr}")
+            return False
         
     def get_recent_commits(self, limit: int = 10) -> str:
         """Get recent commit messages for style reference"""
