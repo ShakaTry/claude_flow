@@ -3,6 +3,7 @@ Validation module for workflow outputs
 """
 import json
 import logging
+import re
 from typing import Dict, Any
 from jsonschema import validate, ValidationError, Draft7Validator
 
@@ -63,12 +64,15 @@ class WorkflowValidator:
         commit_msg = data["commit_msg"]
         
         # Check conventional commit format
-        conventional_prefixes = [
-            "feat:", "fix:", "docs:", "style:", "refactor:",
-            "test:", "chore:", "perf:", "ci:", "build:"
+        conventional_types = [
+            "feat", "fix", "docs", "style", "refactor",
+            "test", "chore", "perf", "ci", "build"
         ]
         
-        if not any(commit_msg.startswith(prefix) for prefix in conventional_prefixes):
+        # Check format: type(scope)?: description or type: description
+        pattern = r'^(' + '|'.join(conventional_types) + r')(\([^)]+\))?:\s.+'
+        
+        if not re.match(pattern, commit_msg):
             self.logger.warning(f"Commit message doesn't follow conventional format: {commit_msg}")
             
         # Check PR body has some structure

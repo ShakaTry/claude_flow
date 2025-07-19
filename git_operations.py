@@ -163,22 +163,6 @@ class GitOperations:
             self.logger.error(f"Failed to create PR: {e.stderr}")
             return None
             
-    def finalize_workflow(self, messages: Dict[str, Any]):
-        """Finalize the Git workflow with commit and optional PR"""
-        # Stage all changes
-        self.stage_all_changes()
-        
-        # Commit with generated message
-        commit_msg = messages.get("commit_msg", "feat: update feature")
-        self.commit(commit_msg)
-        
-        # Push to remote
-        self.push()
-        
-        # Create PR if possible
-        pr_title = messages.get("pr_title", "New feature")
-        pr_body = messages.get("pr_body", "Feature implementation")
-        self.create_pull_request(pr_title, pr_body)
         
     def get_recent_commits(self, limit: int = 10) -> str:
         """Get recent commit messages for style reference"""

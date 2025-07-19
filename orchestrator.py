@@ -20,9 +20,11 @@ from prompts import PROMPT_TEMPLATES
 
 
 class WorkflowOrchestrator:
-    def __init__(self, feature_name: str, dry_run: bool = False):
+    def __init__(self, feature_name: str, feature_description: str = "", dry_run: bool = False, force_refresh: bool = False):
         self.feature_name = feature_name
+        self.feature_description = feature_description
         self.dry_run = dry_run
+        self.force_refresh = force_refresh
         self.workflow_dir = Path(".claude-workflow")
         self.phase_outputs_dir = self.workflow_dir / "phase_outputs"
         self.logs_dir = self.workflow_dir / "logs"
@@ -97,29 +99,30 @@ class WorkflowOrchestrator:
         try:
             self.logger.info(f"Starting workflow for feature: {self.feature_name}")
             
-            # Phase 0: Git Context Analysis
+            # Phase 0: Claude Session - Git Context Analysis
             git_context = self._phase_git_analysis()
             
-            # Validation: Check Git context
-            if not self._validate_git_context(git_context):
+            # Script Phase: Validate Git Context
+            if not self._script_validate_git_context(git_context):
                 return False
                 
-            # Phase 1: Feature Analysis
+            # Phase 1: Claude Session - Feature Analysis
             analysis = self._phase_feature_analysis(git_context)
             
-            # Git Operation: Create feature branch
-            if not self.dry_run:
-                self.git.create_feature_branch(self.feature_name, git_context)
+            # Script Phase: Apply Git Workflow Part 1
+            self._script_git_workflow_part1(git_context)
                 
-            # Phase 2: Documentation Generation
+            # Phase 2: Claude Session - Documentation Generation
             self._phase_documentation_generation(analysis)
             
-            # Phase 3: Commit Message Generation
+            # Script Phase: Validate Documentation
+            self._script_validate_documentation()
+            
+            # Phase 3: Claude Session - Commit Message Generation
             messages = self._phase_commit_messages()
             
-            # Git Operation: Finalize workflow
-            if not self.dry_run:
-                self.git.finalize_workflow(messages)
+            # Script Phase: Finalize Git Workflow Part 2
+            self._script_git_workflow_part2(messages)
                 
             self.logger.info("Workflow completed successfully!")
             return True
@@ -129,6 +132,12 @@ class WorkflowOrchestrator:
             self._save_state("error", "failed", {"error": str(e)})
             return False
             
+    def _get_feature_cache_key(self) -> str:
+        """Generate a unique cache key based on feature name and description"""
+        import hashlib
+        content = f"{self.feature_name}:{self.feature_description}"
+        return hashlib.md5(content.encode()).hexdigest()[:8]
+        
     def _phase_git_analysis(self) -> Dict[str, Any]:
         """Phase 0: Analyze Git repository state"""
         self.logger.info("Phase 0: Analyzing Git context...")
@@ -162,12 +171,24 @@ class WorkflowOrchestrator:
         
         return result
         
-    def _validate_git_context(self, git_context: Dict[str, Any]) -> bool:
-        """Validate the Git context is suitable for workflow"""
+    def _script_validate_git_context(self, git_context: Dict[str, Any]) -> bool:
+        """Script Phase: Validate the Git context is suitable for workflow"""
+        self.logger.info("Script: Validating Git context...")
+        
+        # Check for critical issues
         if git_context.get("has_uncommitted"):
             self.logger.warning("Repository has uncommitted changes")
             if not self.dry_run:
                 response = input("Continue with uncommitted changes? (y/n): ")
+                if response.lower() != 'y':
+                    self.logger.info("Workflow cancelled by user due to uncommitted changes")
+                    return False
+                    
+        # Check for remote repository
+        if not git_context.get("remote_url"):
+            self.logger.warning("No remote repository configured")
+            if not self.dry_run:
+                response = input("Continue without remote repository? (y/n): ")
                 if response.lower() != 'y':
                     return False
                     
@@ -175,22 +196,112 @@ class WorkflowOrchestrator:
         if warnings:
             self.logger.warning(f"Git warnings: {warnings}")
             
+        self.logger.info("Git context validation passed")
+        self._save_state("git_validation", "completed", {"validated": True})
         return True
+        
+    def _script_git_workflow_part1(self, git_context: Dict[str, Any]):
+        """Script Phase: Apply Git workflow part 1 - Create branch"""
+        self.logger.info("Script: Applying Git workflow (Part 1)...")
+        
+        if not self.dry_run:
+            # Read git context and apply branching strategy
+            self.logger.info("Creating feature branch based on strategy...")
+            self.git.create_feature_branch(self.feature_name, git_context)
+            self.logger.info("Feature branch created successfully")
+        else:
+            self.logger.info("[DRY RUN] Would create feature branch")
+            
+        self._save_state("git_workflow_part1", "completed", {
+            "branch_created": True,
+            "feature_name": self.feature_name
+        })
+        
+    def _script_validate_documentation(self):
+        """Script Phase: Validate generated documentation"""
+        self.logger.info("Script: Validating documentation...")
+        
+        doc_path = Path(f"docs/tests/{self.feature_name}_tests.md")
+        
+        if not self.dry_run and doc_path.exists():
+            # Check file exists and has content
+            content = doc_path.read_text()
+            
+            # Validate required sections
+            required_sections = ["## Overview", "## Test Cases", "## Edge Cases", "## Dependencies"]
+            missing_sections = []
+            
+            for section in required_sections:
+                if section not in content:
+                    missing_sections.append(section)
+                    
+            if missing_sections:
+                self.logger.warning(f"Documentation missing sections: {missing_sections}")
+            else:
+                self.logger.info("Documentation validation passed")
+                
+            # Check minimum length
+            if len(content) < 200:
+                self.logger.warning("Documentation seems too short")
+                
+        self._save_state("doc_validation", "completed", {"validated": True})
+        
+    def _script_git_workflow_part2(self, messages: Dict[str, Any]):
+        """Script Phase: Finalize Git workflow part 2 - Commit, push, PR"""
+        self.logger.info("Script: Finalizing Git workflow (Part 2)...")
+        
+        if not self.dry_run:
+            # Stage all changes
+            self.logger.info("Staging all changes...")
+            self.git.stage_all_changes()
+            
+            # Commit with generated message
+            self.logger.info("Creating commit...")
+            commit_msg = messages.get("commit_msg", "feat: update feature")
+            self.git.commit(commit_msg)
+            
+            # Push to remote
+            self.logger.info("Pushing to remote...")
+            self.git.push()
+            
+            # Create PR if possible
+            self.logger.info("Creating pull request...")
+            pr_title = messages.get("pr_title", "New feature")
+            pr_body = messages.get("pr_body", "Feature implementation")
+            pr_url = self.git.create_pull_request(pr_title, pr_body)
+            
+            if pr_url:
+                self.logger.info(f"Pull request created: {pr_url}")
+        else:
+            self.logger.info("[DRY RUN] Would stage, commit, push and create PR")
+            
+        self._save_state("git_workflow_part2", "completed", {
+            "committed": True,
+            "pushed": True,
+            "pr_created": True
+        })
         
     def _phase_feature_analysis(self, git_context: Dict[str, Any]) -> Dict[str, Any]:
         """Phase 1: Analyze the feature requirements"""
         self.logger.info("Phase 1: Analyzing feature requirements...")
         
-        # Check cache
-        cached = self._load_phase_output("analysis")
-        if cached:
-            self.logger.info("Using cached feature analysis")
-            return cached
+        # Check cache with feature-specific key
+        cache_key = self._get_feature_cache_key()
+        cached = self._load_phase_output(f"analysis_{cache_key}")
+        if cached and not self.force_refresh:
+            # Verify cache is for the same feature
+            if cached.get("feature_name") == self.feature_name:
+                self.logger.info("Using cached feature analysis")
+                return cached
+            else:
+                self.logger.info("Cache mismatch, regenerating analysis...")
             
         # Prepare prompt
+        feature_desc = f"\nDescription: {self.feature_description}" if self.feature_description else ""
         prompt = PROMPT_TEMPLATES["feature_analysis"].format(
             git_context=json.dumps(git_context, indent=2),
-            feature_name=self.feature_name
+            feature_name=self.feature_name,
+            feature_description=feature_desc
         )
         
         # Execute Claude
@@ -200,7 +311,10 @@ class WorkflowOrchestrator:
             self.validator.validate_feature_analysis
         )
         
-        # Save output
+        # Save output with feature-specific key
+        cache_key = self._get_feature_cache_key()
+        self._save_phase_output(f"analysis_{cache_key}", result)
+        # Also save as generic for backward compatibility
         self._save_phase_output("analysis", result)
         self._save_state("feature_analysis", "completed", result)
         
@@ -212,7 +326,8 @@ class WorkflowOrchestrator:
         
         # Prepare prompt
         prompt = PROMPT_TEMPLATES["doc_generation"].format(
-            analysis=json.dumps(analysis, indent=2)
+            analysis=json.dumps(analysis, indent=2),
+            feature_name=self.feature_name
         )
         
         # Execute Claude for documentation
@@ -221,6 +336,12 @@ class WorkflowOrchestrator:
         # Save documentation file
         doc_path = Path(f"docs/tests/{self.feature_name}_tests.md")
         doc_path.parent.mkdir(parents=True, exist_ok=True)
+        
+        # Save to phase outputs for inspection even in dry-run
+        self._save_phase_output("documentation", {
+            "content": doc_content,
+            "target_path": str(doc_path)
+        })
         
         if not self.dry_run:
             doc_path.write_text(doc_content)
@@ -264,11 +385,28 @@ class WorkflowOrchestrator:
 
 def main():
     parser = argparse.ArgumentParser(
-        description="Claude Code Orchestrator - External orchestration for Claude Code workflows"
+        description="Claude Code Orchestrator - External orchestration for Claude Code workflows",
+        epilog="""
+Examples:
+  python orchestrator.py auth --dry-run
+  python orchestrator.py user-login -d "Add login with email and password" --dry-run
+  python orchestrator.py payment -d "Stripe integration for subscriptions"
+  
+Note: The feature name can be approximate. Claude will understand variations like:
+  'auth', 'authentication', 'user-auth', 'login-system' → User authentication feature
+  'payment', 'payments', 'billing' → Payment processing feature
+        """,
+        formatter_class=argparse.RawDescriptionHelpFormatter
     )
     parser.add_argument(
         "feature_name",
-        help="Name of the feature to implement"
+        help="Name of the feature to implement (e.g., 'user-auth', 'payment-integration')"
+    )
+    parser.add_argument(
+        "--description",
+        "-d",
+        help="Detailed description of what the feature should do",
+        default=""
     )
     parser.add_argument(
         "--dry-run",
@@ -285,10 +423,21 @@ def main():
         action="store_true",
         help="Clean up workflow directory and exit"
     )
+    parser.add_argument(
+        "--force-refresh",
+        "-f",
+        action="store_true",
+        help="Force regeneration of all analyses (ignore cache)"
+    )
     
     args = parser.parse_args()
     
-    orchestrator = WorkflowOrchestrator(args.feature_name, dry_run=args.dry_run)
+    orchestrator = WorkflowOrchestrator(
+        args.feature_name, 
+        feature_description=args.description,
+        dry_run=args.dry_run,
+        force_refresh=args.force_refresh
+    )
     
     if args.cleanup:
         orchestrator.cleanup()

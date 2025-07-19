@@ -20,9 +20,16 @@ Analyze the repository and return ONLY the JSON object, no other text.""",
     "feature_analysis": """Given this Git context: {git_context}
 
 Analyze the feature: {feature_name}
+{feature_description}
+
+IMPORTANT: Be intelligent about interpreting the feature name and description:
+- If the name is vague (e.g., "auth", "payment", "login"), infer the full feature from context
+- If there are typos or variations (e.g., "authentification", "auth-system", "user login"), understand the intent
+- If no description is provided, make reasonable assumptions based on common patterns
+- Look at the existing codebase structure to understand naming conventions
 
 Based on common patterns and best practices, return ONLY a JSON object with:
-- feature_name: string (the feature name provided)
+- feature_name: string (standardized feature name, corrected if needed)
 - main_file: string (suggested main file path for this feature)
 - components: array of component names (logical components needed)
 - test_cases: array of test descriptions (key test scenarios)
