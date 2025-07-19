@@ -1,95 +1,123 @@
 # Test Documentation for claude-interface
 
 ## Overview
-This document outlines the comprehensive test suite for the claude-interface feature, which provides integration with Claude's API. The interface includes components for API communication, retry handling, response parsing, CLI command building, and response validation. These tests ensure reliable communication with Claude's API, proper error handling, and robust parsing of responses in various formats.
+This test suite validates the Claude CLI interface functionality, ensuring reliable command execution, proper error handling, response parsing, and retry mechanisms. The tests verify that the system can successfully communicate with Claude CLI, handle various failure scenarios, and maintain data integrity throughout the process.
 
 ## Test Cases
 
-### Test successful API call to Claude
-- **Description**: Verifies that the ClaudeAPIClient can successfully communicate with Claude's API and receive valid responses
-- **Expected behavior**: API call completes successfully with 200 status code and returns properly formatted response
-- **Test data/setup required**: Valid API credentials, mock Claude API endpoint, sample request payload
+### Test successful Claude command execution
+- **Description**: Verifies that Claude commands execute correctly and return expected results
+- **Expected behavior**: Command executes without errors, returns valid response within timeout period
+- **Test data/setup required**: Mock Claude CLI executable, sample command strings, expected response formats
 
-### Test retry logic with exponential backoff
-- **Description**: Validates that the RetryHandler implements correct exponential backoff strategy for failed requests
-- **Expected behavior**: Failed requests are retried with increasing delays (e.g., 1s, 2s, 4s, 8s) up to maximum retry count
-- **Test data/setup required**: Mock API that returns failures, configurable retry settings, time measurement utilities
+### Test retry mechanism with transient failures
+- **Description**: Validates automatic retry logic when encountering temporary failures
+- **Expected behavior**: System retries failed commands according to configured retry policy, eventually succeeds or fails gracefully
+- **Test data/setup required**: Mock failures with different error codes, retry configuration settings, success on nth attempt scenarios
 
-### Test JSON extraction from various response formats
-- **Description**: Ensures JSONResponseParser can extract JSON from different response formats including plain JSON, markdown-wrapped JSON, and mixed content
-- **Expected behavior**: JSON is correctly extracted regardless of surrounding text or markdown formatting
-- **Test data/setup required**: Sample responses with JSON in various formats (plain, markdown code blocks, inline)
+### Test JSON extraction from Claude responses
+- **Description**: Ensures correct parsing of JSON data from Claude's text responses
+- **Expected behavior**: Successfully extracts valid JSON objects from mixed text/JSON responses
+- **Test data/setup required**: Sample Claude responses with embedded JSON, various JSON formats and structures
 
-### Test CLI command construction and execution
-- **Description**: Verifies CLICommandBuilder correctly constructs and executes command-line interface commands
-- **Expected behavior**: Commands are built with proper arguments, flags, and options, and execute without errors
-- **Test data/setup required**: Command templates, argument lists, mock command executor
+### Test timeout handling for long-running commands
+- **Description**: Verifies proper handling when Claude commands exceed configured timeout
+- **Expected behavior**: Command terminates gracefully after timeout, appropriate error is raised
+- **Test data/setup required**: Long-running command simulations, timeout configurations, partial response scenarios
 
-### Test handling of malformed JSON responses
-- **Description**: Validates system behavior when receiving invalid or malformed JSON responses
-- **Expected behavior**: Graceful error handling with appropriate error messages, no crashes or unhandled exceptions
-- **Test data/setup required**: Various malformed JSON samples (missing brackets, invalid syntax, incomplete objects)
+### Test error parsing and exception handling
+- **Description**: Validates parsing of error messages and proper exception propagation
+- **Expected behavior**: Error messages are correctly extracted, appropriate exceptions raised with context
+- **Test data/setup required**: Various error response formats, stderr outputs, exit codes
 
-### Test timeout and connection error handling
-- **Description**: Ensures proper handling of network timeouts and connection failures
-- **Expected behavior**: Timeouts trigger retry logic, connection errors are logged, appropriate fallback behavior is executed
-- **Test data/setup required**: Mock network conditions, configurable timeout values, error simulation tools
+### Test response validation against JSON schema
+- **Description**: Ensures Claude responses conform to expected JSON schemas
+- **Expected behavior**: Valid responses pass schema validation, invalid responses are rejected with clear errors
+- **Test data/setup required**: JSON schemas for different response types, valid and invalid response samples
+
+### Test command formatting and escaping
+- **Description**: Verifies proper formatting and escaping of commands sent to Claude
+- **Expected behavior**: Special characters are properly escaped, commands are formatted correctly for subprocess execution
+- **Test data/setup required**: Commands with special characters, quotes, newlines, and other escape sequences
+
+### Test subprocess communication and buffering
+- **Description**: Validates reliable communication between Python process and Claude subprocess
+- **Expected behavior**: Data flows correctly through stdin/stdout/stderr, no buffer overflows or data loss
+- **Test data/setup required**: Large payloads, streaming responses, various buffer sizes
 
 ## Edge Cases
 
-### Handle partial JSON responses from streaming API
-- **Scenario description**: When using streaming API, responses may arrive in chunks with incomplete JSON
-- **How to test**: Simulate streaming responses that deliver JSON in multiple parts, test buffer management and reconstruction
-- **Expected handling**: System should buffer partial responses and only attempt parsing when complete JSON object is received
+### Claude CLI not installed or not in PATH
+- **Scenario description**: System attempts to execute Claude commands when CLI is missing
+- **How to test**: Remove Claude from PATH or rename executable
+- **Expected handling**: Clear error message indicating Claude CLI is not found, suggestions for installation
 
-### Parse nested JSON within markdown code blocks
-- **Scenario description**: Responses may contain JSON embedded within markdown code blocks with various formatting
-- **How to test**: Create responses with JSON in triple-backtick blocks, with language specifiers, nested within other markdown
-- **Expected handling**: Parser should correctly identify and extract JSON regardless of markdown nesting depth or formatting
+### Malformed JSON in Claude response
+- **Scenario description**: Claude returns invalid JSON that cannot be parsed
+- **How to test**: Mock responses with syntax errors, truncated JSON, mixed formats
+- **Expected handling**: Graceful degradation, attempt to extract partial data, clear error reporting
 
-### Retry on rate limit errors with proper backoff
-- **Scenario description**: API may return 429 rate limit errors requiring specific backoff strategy
-- **How to test**: Mock API responses with 429 status and Retry-After headers, verify backoff respects these headers
-- **Expected handling**: System should honor Retry-After headers, implement progressive backoff, and eventually fail gracefully if limits persist
+### Partial JSON response due to timeout
+- **Scenario description**: Timeout occurs mid-JSON response, resulting in incomplete data
+- **How to test**: Simulate timeout during JSON streaming
+- **Expected handling**: Attempt to parse partial JSON, return available data with warning
 
-### Handle empty or null responses gracefully
-- **Scenario description**: API may return empty responses, null values, or responses with no content
-- **How to test**: Send various empty response types (null, empty string, empty object, status-only responses)
-- **Expected handling**: System should detect empty responses, log appropriately, and return meaningful error or default values
+### Unicode and special characters in responses
+- **Scenario description**: Claude returns responses containing unicode, emojis, or special characters
+- **How to test**: Mock responses with various character encodings and special symbols
+- **Expected handling**: Proper encoding/decoding, no data corruption or crashes
 
-### Extract JSON from responses with multiple code blocks
-- **Scenario description**: Responses may contain multiple code blocks with different content types including multiple JSON blocks
-- **How to test**: Create responses with multiple code blocks containing JSON, non-JSON code, and mixed content
-- **Expected handling**: Parser should identify and extract all valid JSON blocks, potentially returning array of parsed objects
+### Concurrent Claude processes interfering
+- **Scenario description**: Multiple Claude processes running simultaneously cause conflicts
+- **How to test**: Launch multiple test instances in parallel
+- **Expected handling**: Process isolation, no shared state conflicts, proper resource cleanup
 
-### Handle authentication failures and token expiration
-- **Scenario description**: API tokens may expire or be invalid, requiring proper authentication error handling
-- **How to test**: Use expired tokens, invalid tokens, and simulate mid-session token expiration
-- **Expected handling**: Clear error messages about authentication failures, potential token refresh mechanism, graceful degradation
+### Rate limiting from Claude API
+- **Scenario description**: Claude API enforces rate limits, rejecting requests
+- **How to test**: Simulate rate limit responses, rapid request sequences
+- **Expected handling**: Exponential backoff, queuing mechanism, clear rate limit error messages
+
+### Memory issues with large responses
+- **Scenario description**: Claude returns extremely large responses that strain memory
+- **How to test**: Mock very large response payloads
+- **Expected handling**: Streaming processing, memory-efficient parsing, graceful OOM handling
+
+### Network interruptions during execution
+- **Scenario description**: Network connection drops while Claude command is executing
+- **How to test**: Simulate network failures at various points
+- **Expected handling**: Appropriate timeout, retry logic for recoverable failures, clear network error messages
 
 ## Dependencies
 
-### requests
-HTTP library for making API calls to Claude's endpoints
-
-### tenacity
-Retry library providing decorators and utilities for implementing exponential backoff and retry logic
-
-### jsonschema
-JSON validation library for validating response structures against expected schemas
-
-### click
-Command-line interface creation kit for building the CLI command interface
+- **pytest**: Core testing framework for organizing and running tests
+- **pytest-mock**: Provides advanced mocking capabilities for simulating Claude CLI behavior
+- **pytest-cov**: Generates code coverage reports to ensure comprehensive testing
+- **pytest-timeout**: Prevents tests from hanging by enforcing time limits
+- **jsonschema**: Validates JSON responses against defined schemas
 
 ## Test Execution
 
-To run the test suite:
+Run all tests:
+```bash
+pytest tests/test_claude_interface.py -v
+```
 
-1. Install test dependencies: `pip install -r requirements-test.txt`
-2. Set up test environment variables: `export CLAUDE_API_KEY=your_test_key`
-3. Run all tests: `pytest tests/test_claude_interface.py -v`
-4. Run specific test categories:
-   - Unit tests only: `pytest tests/test_claude_interface.py -m unit`
-   - Integration tests: `pytest tests/test_claude_interface.py -m integration`
-   - Edge case tests: `pytest tests/test_claude_interface.py -m edge_cases`
-5. Generate coverage report: `pytest tests/test_claude_interface.py --cov=src/interfaces/claude_interface --cov-report=html`
+Run with coverage:
+```bash
+pytest tests/test_claude_interface.py --cov=claude_interface --cov-report=html
+```
+
+Run specific test class:
+```bash
+pytest tests/test_claude_interface.py::ClaudeInterfaceUnitTests -v
+```
+
+Run with timeout enforcement:
+```bash
+pytest tests/test_claude_interface.py --timeout=30
+```
+
+Run in parallel:
+```bash
+pytest tests/test_claude_interface.py -n auto
+```
