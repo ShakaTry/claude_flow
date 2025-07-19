@@ -172,29 +172,22 @@ class GitOperations:
             return True
             
         try:
-            # Merge the PR directly (without --auto which requires special GitHub settings)
+            # Merge the PR and delete the branch in one command
             self.logger.info(f"Merging PR #{pr_number}...")
+            merge_cmd = ["gh", "pr", "merge", pr_number, "--merge"]
+            if delete_branch:
+                merge_cmd.append("--delete-branch")
+                self.logger.info("Will delete branch after merge")
+            
             merge_result = subprocess.run(
-                ["gh", "pr", "merge", pr_number, "--merge"],
+                merge_cmd,
                 capture_output=True,
                 text=True,
                 check=True
             )
             self.logger.info(f"PR #{pr_number} merged successfully")
-            
             if delete_branch:
-                # Delete the remote branch after merge
-                self.logger.info("Deleting merged branch...")
-                delete_result = subprocess.run(
-                    ["gh", "pr", "merge", pr_number, "--delete-branch"],
-                    capture_output=True,
-                    text=True,
-                    check=False  # Don't fail if branch is already deleted
-                )
-                if delete_result.returncode == 0:
-                    self.logger.info("Remote branch deleted successfully")
-                else:
-                    self.logger.warning("Could not delete remote branch (may already be deleted)")
+                self.logger.info("Remote branch deleted successfully")
                     
                 # Also delete local branch
                 current_branch = self.get_current_branch()
