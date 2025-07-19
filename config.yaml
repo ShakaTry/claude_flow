@@ -1,0 +1,47 @@
+# Claude Flow Orchestrator Configuration
+
+# Claude CLI settings
+claude:
+  command: "claude"  # Path to claude command
+  timeout: 300  # Timeout in seconds for Claude operations
+  max_retries: 3  # Maximum retry attempts for failed operations
+
+# Git settings
+git:
+  default_base_branch: "main"  # Default base branch for features
+  branching_strategy: "feature-branch"  # Options: feature-branch, git-flow
+  auto_push: true  # Automatically push branches
+  create_pr: true  # Automatically create pull requests (requires gh CLI)
+
+# Workflow settings
+workflow:
+  cache_outputs: true  # Cache phase outputs for reuse
+  cleanup_on_success: false  # Clean up .claude-workflow directory after success
+  dry_run_by_default: false  # Run in dry-run mode by default
+
+# Project detection
+project:
+  auto_detect_type: true  # Automatically detect project type
+  default_type: "python"  # Default if auto-detection fails
+
+# Logging
+logging:
+  level: "INFO"  # Log level: DEBUG, INFO, WARNING, ERROR
+  format: "detailed"  # Options: simple, detailed
+  keep_logs: 10  # Number of log files to keep
+
+# Templates
+templates:
+  test_doc_path: "docs/tests/{feature_name}_tests.md"
+  custom_prompts_dir: null  # Directory for custom prompt templates
+
+# Validation
+validation:
+  strict_mode: true  # Fail on validation warnings
+  required_tests_ratio: 0.8  # Minimum ratio of tests to components
+
+# Hooks (optional external scripts)
+hooks:
+  pre_workflow: null  # Script to run before workflow starts
+  post_phase: null  # Script to run after each phase
+  post_workflow: null  # Script to run after workflow completes

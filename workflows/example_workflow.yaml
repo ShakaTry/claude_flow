@@ -1,0 +1,150 @@
+# Example Workflow Definition
+# This demonstrates how workflows could be defined declaratively
+
+workflow:
+  name: "Feature Development Workflow"
+  description: "Standard workflow for developing new features"
+  version: "1.0.0"
+
+# Global settings for this workflow
+settings:
+  require_clean_git: true
+  auto_create_branch: true
+  auto_push: true
+  create_pr: true
+
+# Define the phases
+phases:
+  - id: "git_context"
+    name: "Git Context Analysis"
+    type: "claude"
+    prompt_template: "git_analysis"
+    outputs:
+      - current_branch
+      - has_uncommitted
+      - remote_url
+      - branching_strategy
+      - base_branch
+    validation:
+      required: true
+      schema: "git_context"
+    
+  - id: "validate_context"
+    name: "Validate Git Context"
+    type: "script"
+    script: |
+      if data['has_uncommitted']:
+          log.warning("Uncommitted changes detected")
+          if not confirm("Continue with uncommitted changes?"):
+              abort("User cancelled due to uncommitted changes")
+    
+  - id: "feature_analysis"
+    name: "Feature Analysis"
+    type: "claude"
+    prompt_template: "feature_analysis"
+    inputs:
+      - from: "git_context"
+        fields: ["branching_strategy", "base_branch"]
+    outputs:
+      - feature_name
+      - main_file
+      - components
+      - test_cases
+      - dependencies
+    validation:
+      required: true
+      schema: "feature_analysis"
+    
+  - id: "create_branch"
+    name: "Create Feature Branch"
+    type: "git"
+    operation: "create_branch"
+    inputs:
+      - from: "git_context"
+        fields: ["base_branch", "branching_strategy"]
+      - from: "user"
+        fields: ["feature_name"]
+    
+  - id: "generate_docs"
+    name: "Generate Documentation"
+    type: "claude"
+    prompt_template: "doc_generation"
+    inputs:
+      - from: "feature_analysis"
+        all: true
+    outputs:
+      - content: "markdown"
+        file: "docs/tests/{feature_name}_tests.md"
+    
+  - id: "generate_structure"
+    name: "Generate Project Structure"
+    type: "script"
+    script: |
+      # Create directory structure based on analysis
+      for component in data['feature_analysis']['components']:
+          create_dir(f"src/features/{feature_name}/{component}")
+          create_file(f"src/features/{feature_name}/{component}/__init__.py")
+    condition: "config.get('create_structure', False)"
+    
+  - id: "commit_messages"
+    name: "Generate Commit Messages"
+    type: "claude"
+    prompt_template: "commit_messages"
+    inputs:
+      - from: "git"
+        fields: ["changes"]
+    outputs:
+      - commit_msg
+      - pr_title
+      - pr_body
+    validation:
+      required: true
+      schema: "commit_messages"
+    
+  - id: "finalize"
+    name: "Finalize Workflow"
+    type: "git"
+    operation: "finalize"
+    inputs:
+      - from: "commit_messages"
+        all: true
+
+# Error handling
+error_handling:
+  on_phase_failure:
+    - log_error
+    - save_state
+    - notify_user
+  
+  on_validation_failure:
+    max_retries: 3
+    retry_with: "enhanced_prompt"
+  
+  on_git_failure:
+    - show_git_status
+    - provide_recovery_options
+
+# Hooks for extensibility
+hooks:
+  pre_workflow:
+    - validate_environment
+    - check_dependencies
+  
+  post_phase:
+    - save_phase_output
+    - update_progress
+  
+  post_workflow:
+    - cleanup_temp_files
+    - send_notification
+
+# Custom validators
+validators:
+  feature_name:
+    pattern: "^[a-z][a-z0-9-]*$"
+    max_length: 50
+    message: "Feature name must be lowercase with hyphens"
+  
+  branch_name:
+    pattern: "^(feature|bugfix|hotfix)/[a-z0-9-]+$"
+    message: "Branch name must follow git-flow convention"
