@@ -264,11 +264,15 @@ class WorkflowOrchestrator:
             self.logger.info("Pushing to remote...")
             self.git.push()
             
-            # Create PR if possible
+            # Create PR if possible (to the base branch from git context)
             self.logger.info("Creating pull request...")
             pr_title = messages.get("pr_title", "New feature")
             pr_body = messages.get("pr_body", "Feature implementation")
-            pr_url = self.git.create_pull_request(pr_title, pr_body)
+            
+            # Always use develop as base branch for PRs
+            base_branch = "develop"
+            
+            pr_url = self.git.create_pull_request(pr_title, pr_body, base_branch)
             
             if pr_url:
                 self.logger.info(f"Pull request created: {pr_url}")

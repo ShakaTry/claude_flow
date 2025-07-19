@@ -88,15 +88,15 @@ class GitOperations:
         
     def create_feature_branch(self, feature_name: str, git_context: Dict[str, Any]):
         """Create a feature branch based on the branching strategy"""
-        strategy = git_context.get("branching_strategy", "feature-branch")
-        base_branch = git_context.get("base_branch", "main")
+        # Always use develop as base branch for now
+        base_branch = "develop"
         
         # Since we're creating test documentation, use docs/ prefix
         branch_name = f"docs/{feature_name}"
             
-        self.logger.info(f"Creating feature branch: {branch_name}")
+        self.logger.info(f"Creating feature branch: {branch_name} from {base_branch}")
         
-        # Ensure we're on the base branch
+        # Ensure we're on develop
         current = self.get_current_branch()
         if current != base_branch:
             self._run_git_command(["checkout", base_branch])
@@ -133,7 +133,7 @@ class GitOperations:
             
         self._run_git_command(args)
         
-    def create_pull_request(self, title: str, body: str) -> Optional[str]:
+    def create_pull_request(self, title: str, body: str, base_branch: Optional[str] = None) -> Optional[str]:
         """Create a pull request using gh CLI if available"""
         try:
             # Check if gh CLI is available
@@ -147,8 +147,13 @@ class GitOperations:
             return None
             
         try:
+            # Build command with base branch if specified
+            cmd = ["gh", "pr", "create", "--title", title, "--body", body]
+            if base_branch:
+                cmd.extend(["--base", base_branch])
+                
             result = subprocess.run(
-                ["gh", "pr", "create", "--title", title, "--body", body],
+                cmd,
                 capture_output=True,
                 text=True,
                 check=True
