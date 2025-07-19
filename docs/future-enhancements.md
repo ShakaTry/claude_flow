@@ -156,3 +156,134 @@ python orchestrator.py --list-issues component
 - **Intégration** : Les PRs de tests peuvent fermer automatiquement les issues
 
 C'est exactement l'esprit du projet : l'orchestration externe où les scripts Python dirigent et Claude est juste un moteur de génération.
+
+## Architecture des Tests Générés
+
+### Organisation Structurée
+Pour garantir la réutilisabilité du système pour la génération de tests depuis la documentation, il est crucial d'avoir une architecture de tests bien organisée.
+
+### Structure des Fichiers de Tests
+```
+docs/tests/
+├── .registry.json           # Registre global des tests documentés
+├── unit/                    # Tests unitaires
+│   ├── orchestrator_tests.md
+│   ├── claude_interface_tests.md
+│   └── validators_tests.md
+├── integration/             # Tests d'intégration
+│   ├── git_workflow_tests.md
+│   └── phase_transitions_tests.md
+├── e2e/                     # Tests end-to-end
+│   └── complete_workflow_tests.md
+└── performance/             # Tests de performance
+    └── claude_retry_tests.md
+```
+
+### Format Standardisé des Spécifications
+Chaque fichier de test doit suivre un format strict pour permettre la conversion automatique en code de test :
+
+```markdown
+# Test Specification: {Component}
+
+## Metadata
+```yaml
+component: claude_interface
+type: unit
+dependencies: 
+  - pytest
+  - pytest-mock
+  - pytest-asyncio
+priority: high
+estimated_complexity: medium
+```
+
+## Test Suite Structure
+
+### Test Class: TestExecuteRaw
+**Purpose**: Validate raw execution functionality
+**Setup**: Mock subprocess.run
+**Teardown**: Clear all mocks
+
+#### Test: test_successful_execution
+```yaml
+given:
+  - Valid prompt string
+  - Subprocess returns success
+when:
+  - execute_raw() is called
+then:
+  - Returns stdout content
+  - No exceptions raised
+  - Subprocess called with correct args
+```
+
+#### Test: test_timeout_handling
+```yaml
+given:
+  - Valid prompt
+  - Subprocess will timeout
+when:
+  - execute_raw() with timeout=5
+then:
+  - Raises TimeoutError
+  - Process is terminated
+```
+```
+
+### Avantages de cette Structure
+
+1. **Conversion Automatique** : Le format YAML permet une conversion directe en code de test
+2. **Réutilisabilité** : La même structure peut générer différents frameworks de test
+3. **Traçabilité** : Chaque test est lié à sa spécification
+4. **Maintenance** : Les mises à jour de specs peuvent régénérer les tests
+
+### Pipeline de Génération de Tests
+
+```mermaid
+graph LR
+    A[Spec Markdown] --> B[Parser]
+    B --> C[Test Generator]
+    C --> D[Framework Adapter]
+    D --> E[Test Code]
+    E --> F[Test Runner]
+    F --> G[Coverage Report]
+    G --> H[Update Spec]
+```
+
+### Commandes Futures pour la Génération de Tests
+
+```bash
+# Générer les tests depuis une spec
+python test_generator.py --from-spec docs/tests/unit/claude_interface_tests.md
+
+# Générer tous les tests manquants
+python test_generator.py --generate-missing
+
+# Vérifier la couverture spec vs code
+python test_generator.py --coverage-check
+
+# Mettre à jour les tests après modification de spec
+python test_generator.py --update-tests claude_interface
+```
+
+### Intégration avec l'Orchestrateur
+
+L'orchestrateur pourra :
+1. Générer la documentation de tests avec structure appropriée
+2. Créer les issues pour l'implémentation
+3. Lancer la génération automatique des tests
+4. Vérifier que les tests passent
+5. Corriger le code si nécessaire
+
+```python
+# Workflow complet
+workflow = TestWorkflow(component="claude_interface")
+workflow.generate_spec()      # Utilise Claude pour créer la spec
+workflow.create_issues()      # Crée les issues GitHub
+workflow.generate_tests()     # Génère le code de test
+workflow.run_tests()          # Execute les tests
+workflow.fix_failures()       # Utilise Claude pour corriger
+workflow.create_pr()          # PR avec tests + fixes
+```
+
+Cette architecture garantit que les spécifications de tests sont suffisamment structurées pour permettre une automatisation complète du cycle de développement des tests.
