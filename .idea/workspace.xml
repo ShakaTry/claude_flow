@@ -43,7 +43,7 @@
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager": "true",
     "RunOnceActivity.git.unshallow": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "git-widget-placeholder": "develop",
+    "git-widget-placeholder": "bugfix/general-fixes",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -88,7 +88,7 @@
                   <entry key="branch">
                     <value>
                       <list>
-                        <option value="test-orchestrator" />
+                        <option value="chore/code-quality-check" />
                       </list>
                     </value>
                   </entry>
