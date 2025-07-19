@@ -183,7 +183,7 @@ class GitOperations:
             self.logger.info(f"PR #{pr_number} merged successfully")
             
             if delete_branch:
-                # Delete the branch after merge
+                # Delete the remote branch after merge
                 self.logger.info("Deleting merged branch...")
                 delete_result = subprocess.run(
                     ["gh", "pr", "merge", pr_number, "--delete-branch"],
@@ -192,9 +192,22 @@ class GitOperations:
                     check=False  # Don't fail if branch is already deleted
                 )
                 if delete_result.returncode == 0:
-                    self.logger.info("Branch deleted successfully")
+                    self.logger.info("Remote branch deleted successfully")
                 else:
-                    self.logger.warning("Could not delete branch (may already be deleted)")
+                    self.logger.warning("Could not delete remote branch (may already be deleted)")
+                    
+                # Also delete local branch
+                current_branch = self.get_current_branch()
+                if current_branch.startswith("docs/"):
+                    # Switch to develop before deleting current branch
+                    self._run_git_command(["checkout", "develop"])
+                    # Delete the local branch
+                    self._run_git_command(["branch", "-D", current_branch])
+                    self.logger.info(f"Local branch {current_branch} deleted")
+                    
+                # Prune remote references to keep IDE in sync
+                self._run_git_command(["remote", "prune", "origin"])
+                self.logger.info("Pruned remote references")
                     
             return True
             
