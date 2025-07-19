@@ -91,11 +91,8 @@ class GitOperations:
         strategy = git_context.get("branching_strategy", "feature-branch")
         base_branch = git_context.get("base_branch", "main")
         
-        # Determine branch name based on strategy
-        if strategy == "git-flow":
-            branch_name = f"feature/{feature_name}"
-        else:
-            branch_name = f"feature-{feature_name}"
+        # Since we're creating test documentation, use docs/ prefix
+        branch_name = f"docs/{feature_name}"
             
         self.logger.info(f"Creating feature branch: {branch_name}")
         
