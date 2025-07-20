@@ -1,5 +1,101 @@
 # Future Enhancements - Système de Documentation Intelligente
 
+## 🚀 Auto-Gitignore Management
+
+### Problème Actuel
+Lorsque l'orchestrateur détecte des fichiers non-committé (comme `.idea/workspace.xml`, `*.pyc`, `.DS_Store`), il s'arrête et demande une intervention manuelle. Cela interrompt le workflow automatisé.
+
+### Solution Proposée : Détection et Gestion Automatique
+
+#### 🎯 **Fonctionnalités**
+1. **Détection de patterns** : Identifier automatiquement les fichiers IDE/temporaires
+2. **Proposition intelligente** : Suggérer l'ajout au `.gitignore`
+3. **Gestion interactive** : Demander confirmation avant modification
+4. **Backup de sécurité** : Sauvegarder l'ancien `.gitignore`
+
+#### 🔧 **Patterns à Détecter**
+```yaml
+ide_files:
+  - ".idea/**"
+  - ".vscode/**" 
+  - "*.swp", "*.swo"
+  - ".settings/**"
+
+temp_files:
+  - "*.pyc", "*.pyo"
+  - "__pycache__/**"
+  - "*.tmp", "*.temp"
+  - ".pytest_cache/**"
+
+os_files:
+  - ".DS_Store"
+  - "Thumbs.db"
+  - "*.log"
+```
+
+#### 🎮 **Interface Utilisateur**
+```
+⚠️  Detected uncommitted IDE/temp files:
+   • .idea/workspace.xml (IDE configuration)
+   • __pycache__/config.cpython-313.pyc (Python cache)
+
+🤖 Claude can automatically add these to .gitignore:
+   + .idea/
+   + __pycache__/
+
+Options:
+  [y] Add to .gitignore and continue
+  [n] Continue without changes  
+  [s] Show what would be added
+  [c] Cancel workflow
+
+Choice (y/n/s/c): 
+```
+
+#### 🏗️ **Implémentation**
+
+1. **Nouveau module** : `gitignore_manager.py`
+```python
+class GitignoreManager:
+    def detect_ignorable_files(self, uncommitted_files: List[str]) -> Dict[str, List[str]]
+    def suggest_gitignore_additions(self, files: Dict[str, List[str]]) -> List[str]
+    def apply_gitignore_changes(self, additions: List[str], backup: bool = True)
+    def get_user_choice(self, suggestions: List[str]) -> str
+```
+
+2. **Intégration dans l'orchestrateur** :
+```python
+# Dans _script_validate_git_context()
+if git_context.get("has_uncommitted"):
+    uncommitted = self.git.get_uncommitted_files()
+    ignorable = self.gitignore_manager.detect_ignorable_files(uncommitted)
+    
+    if ignorable:
+        if self.gitignore_manager.handle_ignorable_files(ignorable):
+            # Re-check git status après modifications
+            git_context = self._phase_git_analysis()
+```
+
+#### ✅ **Avantages**
+- **Workflow fluide** : Moins d'interruptions manuelles
+- **Bonnes pratiques** : Maintient un `.gitignore` propre
+- **Sécurité** : Demande confirmation, fait des backups
+- **Apprentissage** : Améliore la configuration du projet au fil du temps
+
+#### 🚨 **Considérations de Sécurité**
+- Ne jamais ignorer automatiquement les fichiers code/config importants
+- Toujours demander confirmation pour les modifications
+- Créer des backups avant modification
+- Logger toutes les modifications pour audit
+
+#### 📋 **Statut**
+- **Priorité** : Moyenne
+- **Impact** : Amélioration significative de l'expérience utilisateur
+- **Complexité** : Faible à moyenne
+- **Dépendances** : Aucune
+
+---
+
 ## Concept : Tracking et Génération Automatique
 
 ### 1. Système de Tracking des Docs

@@ -96,6 +96,15 @@ class GitOperations:
             
         self.logger.info(f"Creating feature branch: {branch_name} from {base_branch}")
         
+        # Check for uncommitted changes before switching branches
+        if self.has_uncommitted_changes():
+            self.logger.warning("Uncommitted changes detected. Stashing changes before creating branch...")
+            # Stash changes with a descriptive message
+            stash_result = self._run_git_command(["stash", "push", "-m", f"Auto-stash before creating branch {branch_name}"])
+            stashed = "No local changes to save" not in stash_result.stdout
+        else:
+            stashed = False
+        
         # Ensure we're on develop
         current = self.get_current_branch()
         if current != base_branch:
@@ -107,6 +116,11 @@ class GitOperations:
             
         # Create and checkout new branch
         self._run_git_command(["checkout", "-b", branch_name])
+        
+        # If we stashed changes, pop them back
+        if stashed:
+            self.logger.info("Restoring stashed changes...")
+            self._run_git_command(["stash", "pop"])
         
     def stage_all_changes(self):
         """Stage all changes for commit"""
@@ -172,29 +186,22 @@ class GitOperations:
             return True
             
         try:
-            # Merge the PR directly (without --auto which requires special GitHub settings)
+            # Merge the PR and delete the branch in one command
             self.logger.info(f"Merging PR #{pr_number}...")
+            merge_cmd = ["gh", "pr", "merge", pr_number, "--merge"]
+            if delete_branch:
+                merge_cmd.append("--delete-branch")
+                self.logger.info("Will delete branch after merge")
+            
             merge_result = subprocess.run(
-                ["gh", "pr", "merge", pr_number, "--merge"],
+                merge_cmd,
                 capture_output=True,
                 text=True,
                 check=True
             )
             self.logger.info(f"PR #{pr_number} merged successfully")
-            
             if delete_branch:
-                # Delete the remote branch after merge
-                self.logger.info("Deleting merged branch...")
-                delete_result = subprocess.run(
-                    ["gh", "pr", "merge", pr_number, "--delete-branch"],
-                    capture_output=True,
-                    text=True,
-                    check=False  # Don't fail if branch is already deleted
-                )
-                if delete_result.returncode == 0:
-                    self.logger.info("Remote branch deleted successfully")
-                else:
-                    self.logger.warning("Could not delete remote branch (may already be deleted)")
+                self.logger.info("Remote branch deleted successfully")
                     
                 # Also delete local branch
                 current_branch = self.get_current_branch()
