@@ -96,6 +96,15 @@ class GitOperations:
             
         self.logger.info(f"Creating feature branch: {branch_name} from {base_branch}")
         
+        # Check for uncommitted changes before switching branches
+        if self.has_uncommitted_changes():
+            self.logger.warning("Uncommitted changes detected. Stashing changes before creating branch...")
+            # Stash changes with a descriptive message
+            stash_result = self._run_git_command(["stash", "push", "-m", f"Auto-stash before creating branch {branch_name}"])
+            stashed = "No local changes to save" not in stash_result.stdout
+        else:
+            stashed = False
+        
         # Ensure we're on develop
         current = self.get_current_branch()
         if current != base_branch:
@@ -107,6 +116,11 @@ class GitOperations:
             
         # Create and checkout new branch
         self._run_git_command(["checkout", "-b", branch_name])
+        
+        # If we stashed changes, pop them back
+        if stashed:
+            self.logger.info("Restoring stashed changes...")
+            self._run_git_command(["stash", "pop"])
         
     def stage_all_changes(self):
         """Stage all changes for commit"""
