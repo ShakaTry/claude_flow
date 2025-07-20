@@ -5,6 +5,7 @@ import subprocess
 import logging
 from typing import Dict, Any, List, Optional
 from pathlib import Path
+from git_state import GitStateReport, IssueSeverity
 
 
 class GitOperations:
@@ -88,6 +89,9 @@ class GitOperations:
         
     def create_feature_branch(self, feature_name: str, git_context: Dict[str, Any]):
         """Create a feature branch based on the branching strategy"""
+        # Run preflight checks
+        report = self.perform_preflight_checks("checkout")
+        
         # Always use develop as base branch for now
         base_branch = "develop"
         
@@ -96,14 +100,19 @@ class GitOperations:
             
         self.logger.info(f"Creating feature branch: {branch_name} from {base_branch}")
         
-        # Check for uncommitted changes before switching branches
+        # Check for issues that would prevent branch creation
+        stashed = False
+        if report.has_errors():
+            self.logger.error("Cannot create branch due to repository state issues:")
+            self.logger.error(report.format_report())
+            raise RuntimeError("Repository is in an invalid state for branch creation")
+            
+        # Handle uncommitted changes by stashing
         if self.has_uncommitted_changes():
             self.logger.warning("Uncommitted changes detected. Stashing changes before creating branch...")
             # Stash changes with a descriptive message
             stash_result = self._run_git_command(["stash", "push", "-m", f"Auto-stash before creating branch {branch_name}"])
             stashed = "No local changes to save" not in stash_result.stdout
-        else:
-            stashed = False
         
         # Ensure we're on develop
         current = self.get_current_branch()
@@ -129,11 +138,32 @@ class GitOperations:
         
     def commit(self, message: str):
         """Create a commit with the given message"""
+        # Run preflight checks
+        report = self.perform_preflight_checks("commit")
+        
+        if report.has_errors():
+            self.logger.error("Cannot commit due to repository state issues:")
+            self.logger.error(report.format_report())
+            raise RuntimeError("Repository is in an invalid state for committing")
+            
         self.logger.info(f"Creating commit...")
         self._run_git_command(["commit", "-m", message])
         
     def push(self, branch: Optional[str] = None, set_upstream: bool = True):
         """Push the current branch to remote"""
+        # Run preflight checks
+        report = self.perform_preflight_checks("push")
+        
+        if report.has_errors():
+            self.logger.error("Cannot push due to repository state issues:")
+            self.logger.error(report.format_report())
+            raise RuntimeError("Repository is in an invalid state for pushing")
+            
+        # Check remote connectivity specifically
+        if not report.state.get("remote_connectivity", {}).get("reachable", False):
+            self.logger.error("Cannot push: remote repository is not reachable")
+            raise RuntimeError("Remote repository is not reachable")
+            
         if not branch:
             branch = self.get_current_branch()
             
@@ -226,3 +256,179 @@ class GitOperations:
         """Get recent commit messages for style reference"""
         result = self._run_git_command(["log", f"--oneline", f"-{limit}"])
         return result.stdout
+        
+    def is_in_merge(self) -> bool:
+        """Check if repository is in the middle of a merge"""
+        merge_head = Path(".git/MERGE_HEAD")
+        return merge_head.exists()
+        
+    def is_in_rebase(self) -> bool:
+        """Check if repository is in the middle of a rebase"""
+        rebase_merge = Path(".git/rebase-merge")
+        rebase_apply = Path(".git/rebase-apply")
+        return rebase_merge.exists() or rebase_apply.exists()
+        
+    def is_in_cherry_pick(self) -> bool:
+        """Check if repository is in the middle of a cherry-pick"""
+        cherry_pick_head = Path(".git/CHERRY_PICK_HEAD")
+        return cherry_pick_head.exists()
+        
+    def is_in_bisect(self) -> bool:
+        """Check if repository is in the middle of a bisect"""
+        bisect_log = Path(".git/BISECT_LOG")
+        return bisect_log.exists()
+        
+    def is_detached_head(self) -> bool:
+        """Check if HEAD is detached"""
+        result = self._run_git_command(["symbolic-ref", "-q", "HEAD"], check=False)
+        return result.returncode != 0
+        
+    def get_conflicted_files(self) -> List[str]:
+        """Get list of files with merge conflicts"""
+        result = self._run_git_command(["diff", "--name-only", "--diff-filter=U"])
+        if result.stdout.strip():
+            return result.stdout.strip().split('\n')
+        return []
+        
+    def get_stash_count(self) -> int:
+        """Get number of stashed changes"""
+        result = self._run_git_command(["stash", "list"])
+        if result.stdout.strip():
+            return len(result.stdout.strip().split('\n'))
+        return 0
+        
+    def check_remote_connectivity(self, remote: str = "origin") -> Dict[str, Any]:
+        """Check if remote is reachable and get fetch/push URLs"""
+        connectivity = {
+            "reachable": False,
+            "fetch_url": None,
+            "push_url": None,
+            "error": None
+        }
+        
+        # Get remote URLs
+        fetch_result = self._run_git_command(["remote", "get-url", remote], check=False)
+        if fetch_result.returncode == 0:
+            connectivity["fetch_url"] = fetch_result.stdout.strip()
+            
+        push_result = self._run_git_command(["remote", "get-url", "--push", remote], check=False)
+        if push_result.returncode == 0:
+            connectivity["push_url"] = push_result.stdout.strip()
+            
+        # Test connectivity with ls-remote (lightweight operation)
+        test_result = self._run_git_command(["ls-remote", "--heads", remote], check=False)
+        if test_result.returncode == 0:
+            connectivity["reachable"] = True
+        else:
+            connectivity["error"] = test_result.stderr.strip()
+            
+        return connectivity
+        
+    def get_untracked_files(self) -> List[str]:
+        """Get list of untracked files"""
+        result = self._run_git_command(["ls-files", "--others", "--exclude-standard"])
+        if result.stdout.strip():
+            return result.stdout.strip().split('\n')
+        return []
+        
+    def get_staged_files(self) -> List[str]:
+        """Get list of staged files"""
+        result = self._run_git_command(["diff", "--name-only", "--cached"])
+        if result.stdout.strip():
+            return result.stdout.strip().split('\n')
+        return []
+        
+    def get_modified_files(self) -> List[str]:
+        """Get list of modified but unstaged files"""
+        result = self._run_git_command(["diff", "--name-only"])
+        if result.stdout.strip():
+            return result.stdout.strip().split('\n')
+        return []
+        
+    def get_repository_state(self) -> Dict[str, Any]:
+        """Get comprehensive repository state information"""
+        state = {
+            # Basic info
+            "current_branch": self.get_current_branch(),
+            "is_detached_head": self.is_detached_head(),
+            
+            # Special states
+            "is_in_merge": self.is_in_merge(),
+            "is_in_rebase": self.is_in_rebase(),
+            "is_in_cherry_pick": self.is_in_cherry_pick(),
+            "is_in_bisect": self.is_in_bisect(),
+            
+            # File states
+            "has_uncommitted_changes": self.has_uncommitted_changes(),
+            "staged_files": self.get_staged_files(),
+            "modified_files": self.get_modified_files(),
+            "untracked_files": self.get_untracked_files(),
+            "conflicted_files": self.get_conflicted_files(),
+            
+            # Stash info
+            "stash_count": self.get_stash_count(),
+            
+            # Remote info
+            "remote_url": self.get_remote_url(),
+            "remote_connectivity": self.check_remote_connectivity(),
+            
+            # Repository root
+            "repo_root": self._get_repo_root(),
+            
+            # Clean working directory check
+            "is_clean": False
+        }
+        
+        # Determine if working directory is clean
+        state["is_clean"] = (
+            not state["has_uncommitted_changes"] and
+            not state["is_in_merge"] and
+            not state["is_in_rebase"] and
+            not state["is_in_cherry_pick"] and
+            not state["is_in_bisect"] and
+            len(state["conflicted_files"]) == 0
+        )
+        
+        return state
+        
+    def _get_repo_root(self) -> Optional[str]:
+        """Get the root directory of the git repository"""
+        try:
+            result = self._run_git_command(["rev-parse", "--show-toplevel"])
+            return result.stdout.strip()
+        except subprocess.CalledProcessError:
+            return None
+            
+    def perform_preflight_checks(self, operation: Optional[str] = None) -> GitStateReport:
+        """
+        Perform comprehensive pre-flight checks before Git operations
+        
+        Args:
+            operation: Optional specific operation to check for (e.g., 'commit', 'push', 'pull')
+            
+        Returns:
+            GitStateReport with issues and suggested actions
+        """
+        self.logger.info("Performing Git pre-flight checks...")
+        
+        # Get comprehensive repository state
+        state = self.get_repository_state()
+        
+        # Create state report
+        report = GitStateReport(state)
+        
+        # Check if specific operation is safe
+        if operation:
+            is_safe, reason = report.is_safe_for_operation(operation)
+            if not is_safe:
+                self.logger.warning(f"Operation '{operation}' is not safe: {reason}")
+                
+        # Log summary
+        if report.has_errors():
+            self.logger.error(f"Pre-flight check found {len(report.get_issues_by_severity(IssueSeverity.ERROR))} error(s)")
+        elif report.has_warnings():
+            self.logger.warning(f"Pre-flight check found {len(report.get_issues_by_severity(IssueSeverity.WARNING))} warning(s)")
+        else:
+            self.logger.info("Pre-flight check passed - repository is in a clean state")
+            
+        return report

@@ -6,7 +6,6 @@
   <component name="ChangeListManager">
     <list default="true" id="9939fc76-d871-479d-9e64-8e284db19fb4" name="Changes" comment="">
       <change beforePath="$PROJECT_DIR$/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/README.md" beforeDir="false" afterPath="$PROJECT_DIR$/README.md" afterDir="false" />
     </list>
     <option name="SHOW_DIALOG" value="false" />
     <option name="HIGHLIGHT_CONFLICTS" value="true" />
@@ -49,7 +48,7 @@
     "RunOnceActivity.TerminalTabsStorage.copyFrom.TerminalArrangementManager": "true",
     "RunOnceActivity.git.unshallow": "true",
     "SHARE_PROJECT_CONFIGURATION_FILES": "true",
-    "git-widget-placeholder": "bugfix/git-github",
+    "git-widget-placeholder": "fix/git-operations-robustness",
     "node.js.detected.package.eslint": "true",
     "node.js.detected.package.tslint": "true",
     "node.js.selected.package.eslint": "(autodetect)",
@@ -96,7 +95,7 @@
                   <entry key="branch">
                     <value>
                       <list>
-                        <option value="bugfix/git-github" />
+                        <option value="fix/git-operations-robustness" />
                       </list>
                     </value>
                   </entry>
